@@ -1,0 +1,252 @@
+---
+title: "Homework 2"
+author: "Aishwarya Anuraj"
+output: github_document
+---
+
+This is my solution to Homework 2.
+
+```{r lib_calls}
+library(tidyverse)
+library(readxl)
+```
+
+## Problem 1 
+
+### Part 1 
+
+Reading Mr. Trashwheel dataset. 
+
+```{r read_clean_1}
+trashwheel_df = 
+  read_xlsx(
+    "./data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",
+    sheet = "Mr. Trash Wheel",
+    range = cell_cols("A:N")) %>% 
+  janitor::clean_names() %>% 
+  drop_na(dumpster) %>% 
+  mutate(
+    sports_balls = round(sports_balls),
+    sports_balls = as.integer(sports_balls)
+  )
+```
+
+### Part 2 
+Reading and cleaning the 2017 and 2018 Precipitation data. 
+
+```{r read_clean_2}
+precip_2018 = 
+  read_excel(
+    "./data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",
+    sheet = "2018 Precipitation",
+    skip = 1
+  ) %>% 
+  janitor::clean_names() %>% 
+  drop_na(month) %>% 
+  mutate(year = 2018) %>% 
+  relocate(year)
+
+precip_2017 = 
+  read_excel(
+    "./data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",
+    sheet = "2017 Precipitation",
+    skip = 1
+  ) %>% 
+  janitor::clean_names() %>% 
+  drop_na(month) %>% 
+  mutate(year = 2017) %>% 
+  relocate(year)
+```
+
+Combining the 2017 and 2018 datasets by creating a new dataframe precip_df.
+
+```{r join_1}
+month_df = 
+  tibble(
+    month = 1:12,
+    month_name = month.name
+  )
+
+precip_df = 
+  bind_rows(precip_2017, precip_2018)
+
+precip_joined = left_join(precip_df, month_df, by = "month")
+```
+
+### Part 3 
+
+This dataset contains information from the Mr. Trashwheel collector in Baltimore, Maryland. The trash wheel collects trash and stores it in the dumpster. The dataset contains information on year, month and the trash collected and also includes the specific type of trash. There are a total of `r nrow(trashwheel_df)` rows in the final dataset. Additional data sheets include month precipitation data. The total precipitation in 2018 is `r sum(pull(precip_2018, total))`. The median number of sports balls in a dumpster in 2017 is `r median(pull(trashwheel_df,sports_balls))`
+
+## Problem 2 
+
+### Part 1 
+
+Read and clean NYC transit dataset. 
+
+```{r read_clean_3}
+transit_df = (
+  read_csv(file = "./data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv") %>% 
+  janitor::clean_names() %>% 
+  select(line:entry, vending, ada)
+  )
+```
+
+
+```{r char_logic}
+transit_df$entry[transit_df$entry == "YES"] = 1
+transit_df$entry[transit_df$entry == "NO"] = 0
+transit_df$entry = as.integer(transit_df$entry)
+```
+
+This dataset contains information on th NYC transit system. The following information is available in this dataset `r names(transit_df)`.The data cleaning steps included clean_names function to convert all the variable names to readable forms using snake case and only the important variables we case about are selected in the dataset. The dimensions of the dataset are `r nrow(transit_df)*ncol(transit_df)`. The number of variables in the dataset are `r ncol(transit_df)` and the number of observations in the dataset are `r nrow(transit_df)`. This dataset is now tidy. 
+
+### Part 2
+
+How many distinct stations are there?
+
+```{r distint_stations}
+x = nrow(distinct(transit_df, station_name, line))
+```
+
+The number of distinct stations are `r x`. 
+
+How many stations are ADA compliant?
+
+```{r}
+y = (filter(transit_df, ada == "TRUE") %>% 
+distinct(station_name, line) %>% 
+count())
+```
+
+There are `r y` ADA compliant stations. 
+
+What proportion of station entrances / exits without vending allow entrance?
+
+```{r}
+a = count(filter(transit_df, vending == "NO" ))
+b = (count(filter(transit_df, vending == "NO", entry == "1")))
+c = b/a
+```
+
+The proportion of station entrances / exits without vending that allow entrance is `r c`. 
+
+Reformat data so that route number and route name are distinct variables.  
+
+```{r}
+transit_df = 
+  mutate(transit_df, 
+         route8 = as.character(route8)) %>% 
+  mutate(route9 = as.character(route9)) %>% 
+  mutate(route10 = as.character(route10)) %>% 
+  mutate(route11 = as.character(route11))
+
+transit_df =         
+   pivot_longer(
+    transit_df,
+    route1:route11,
+    names_to = "route_number", 
+    values_to = "route_name")
+```
+
+How many distinct stations serve the A train?
+
+```{r}
+d = (filter(transit_df, route_name == "A") %>% 
+distinct(station_name, line) %>% 
+count())
+```
+
+The number of distinct stations that serve A train is `r d`. 
+
+Of the stations that serve the A train, how many are ADA compliant?
+
+```{r}
+e = (filter(transit_df, route_name == "A", ada == "TRUE") %>% 
+distinct(station_name, line) %>% 
+count())
+```
+
+Of the stations that serve the A train, `r e` are ADA compliant.
+
+## Problem 3 
+
+### Part 1 
+
+```{r}
+polls_df = (
+  read_csv(file = "./data/fivethirtyeight_datasets/pols-month.csv") %>% 
+  janitor::clean_names() %>% 
+  separate(mon, into = c("year", "month", "day"), sep = "-")
+  )
+
+polls_df = 
+  mutate(polls_df, 
+         year = as.numeric(year)) %>% 
+  mutate(month = as.numeric(month)) %>% 
+  mutate(day = as.numeric(day)) 
+
+month2_df = 
+  tibble(
+    month = 1:12,
+    month_name = month.name
+  )
+# Add month name to the dataset and president variable to the dataset. 
+polls_df = (
+  left_join(polls_df, month2_df, by = "month") %>% 
+  mutate(president = ifelse(prez_gop == "1", "gop", "dem")) %>% 
+  select(-prez_gop, -prez_dem, -day) %>% 
+  relocate(month_name) %>% 
+    relocate(year)
+  )
+```
+
+### Part 2 
+
+```{r}
+polls2_df = (
+  read_csv(file = "./data/fivethirtyeight_datasets/snp.csv") %>% 
+  janitor::clean_names() %>% 
+  separate(date, into = c("month", "day", "year"), sep = "/") %>% 
+  select(-day) %>% 
+  relocate(month) %>% 
+  relocate(year) %>% 
+  mutate(
+         year = as.numeric(year)) %>% 
+  mutate(month = as.numeric(month))
+  )
+```
+
+## Part 3 
+
+```{r}
+polls3_df = (
+  read_csv(file = "./data/fivethirtyeight_datasets/unemployment.csv") %>% 
+  janitor::clean_names()
+  )
+polls3_df = (
+      pivot_longer(
+        polls3_df,
+        jan:dec,
+        names_to = "month",
+        values_to = "unemployment"
+        ) %>% 
+      mutate(
+            year = as.numeric(year)) %>% 
+      mutate(month = as.numeric(year))
+            )
+  
+```
+
+## Part 4 
+
+```{r}
+poll_data_joined = 
+  left_join(polls_df, polls2_df, polls3_df,  by = c("year", "month"))
+```
+
+## Summary 
+
+This dataset contains information on the two party political system in the US. Information on the Democratic and Republican parties include the following variables `r names(poll_data_joined)`. The polls_df dataset contains information on the number of Democratic and Republican Presidents, Governers and Senates between years `r range(pull(polls_df, year))`. 
+The polls2_df dataset contains information numbers on the closing value of the s&f stock index along with their numbers between years `r range(pull(polls2_df, year))`. The third dataset containd information on unemployment through the years `r range(pull(polls3_df, year))`. 
+The final dataset poll_data_joined is a dataset with all the three datasets joined together from years `r range(pull(poll_data_joined, year))` and the dimensions of the dataset are `r nrow(poll_data_joined)*ncol(poll_data_joined)`. The number of variables in the dataset are `r ncol(poll_data_joined)` and the number of observations in the dataset are `r nrow(poll_data_joined)`. This dataset is now tidy. 
+
